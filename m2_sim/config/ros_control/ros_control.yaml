@@ -1,0 +1,68 @@
+controller_manager:
+  ros__parameters:
+    use_sim_time: true
+    update_rate: 250  # Hz
+
+    # Increase the controller switch timeout
+    controller_manager_timeout: 10.0  # seconds (default is 5.0)
+
+    joint_states_controller:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    joint_group_effort_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+joint_states_controller:
+  ros__parameters:
+    use_sim_time: true
+
+joint_group_effort_controller:
+  ros__parameters:
+    use_sim_time: true
+    joints:
+      - FL_hip_joint
+      - FL_thigh_joint
+      - FL_calf_joint
+      - FR_hip_joint
+      - FR_thigh_joint
+      - FR_calf_joint
+      - RL_hip_joint
+      - RL_thigh_joint
+      - RL_calf_joint
+      - RR_hip_joint
+      - RR_thigh_joint
+      - RR_calf_joint
+    
+    command_interfaces:
+      - effort
+    state_interfaces:
+      - position
+      - velocity
+    
+    allow_partial_joints_goal: true
+    
+    # Important settings for controller stability
+    state_publish_rate: 100.0
+    action_monitor_rate: 20.0
+    
+    constraints:
+      stopped_velocity_tolerance: 0.01
+      goal_time: 0.0
+      
+    # Default settings that can help with stability
+    hold_trajectory_duration: 0.0
+    action_tolerance: 1.0
+    
+    gains:
+      FL_hip_joint   : {p: 100.0, i: 0.2, d: 1.0, i_clamp: 2.5}
+      FL_thigh_joint : {p: 100.0, i: 0.2, d: 1.0, i_clamp: 2.5}
+      FL_calf_joint  : {p: 100.0, i: 0.2, d: 1.0, i_clamp: 2.5}
+      FR_hip_joint   : {p: 100.0, i: 0.2, d: 1.0, i_clamp: 2.5}
+      FR_thigh_joint : {p: 100.0, i: 0.2, d: 1.0, i_clamp: 2.5}
+      FR_calf_joint  : {p: 100.0, i: 0.2, d: 1.0, i_clamp: 2.5}
+      RL_hip_joint   : {p: 100.0, i: 0.2, d: 1.0, i_clamp: 2.5}
+      RL_thigh_joint : {p: 100.0, i: 0.2, d: 1.0, i_clamp: 2.5}
+      RL_calf_joint  : {p: 100.0, i: 0.2, d: 1.0, i_clamp: 2.5}
+      RR_hip_joint   : {p: 100.0, i: 0.2, d: 1.0, i_clamp: 2.5}
+      RR_thigh_joint : {p: 100.0, i: 0.2, d: 1.0, i_clamp: 2.5}
+      RR_calf_joint  : {p: 100.0, i: 0.2, d: 1.0, i_clamp: 2.5}
