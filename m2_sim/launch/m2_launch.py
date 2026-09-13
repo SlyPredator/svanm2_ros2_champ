@@ -14,7 +14,7 @@ from launch.actions import (
 )
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command, LaunchConfiguration
+from launch.substitutions import Command, LaunchConfiguration, PythonExpression
 
 
 def generate_launch_description():
@@ -81,8 +81,8 @@ def generate_launch_description():
     )
     declare_command_interface = DeclareLaunchArgument(
         "command_interface",
-        default_value="effort",
-        description="ros2_control joint command interface: effort or position",
+        default_value="position",
+        description="ros2_control joint command interface: position or effort",
     )
     declare_disable_camera = DeclareLaunchArgument(
         "disable_camera", default_value="true", description="Leave out the mono camera"
@@ -96,6 +96,13 @@ def generate_launch_description():
     declare_disable_velodyne_lidar = DeclareLaunchArgument(
         "disable_velodyne_lidar", default_value="true", description="Leave out the Velodyne lidar"
     )
+
+    joint_controller_name = PythonExpression([
+        "'joint_group_", LaunchConfiguration("command_interface"), "_controller'"
+    ])
+    joint_controller_topic = PythonExpression([
+        "'joint_group_", LaunchConfiguration("command_interface"), "_controller/joint_trajectory'"
+    ])
 
     # Description nodes and parameters
     description_command = Command([
@@ -122,7 +129,7 @@ def generate_launch_description():
             {"publish_joint_states": True},
             {"publish_joint_control": True},
             {"publish_foot_contacts": False},
-            {"joint_controller_topic": "joint_group_effort_controller/joint_trajectory"},
+            {"joint_controller_topic": joint_controller_topic},
             {"urdf": description_command},
             joints_config,
             links_config,
@@ -308,7 +315,7 @@ def generate_launch_description():
         ]
     )
 
-    controller_spawner_effort = TimerAction(
+    controller_spawner_joints = TimerAction(
         period=15.0,
         actions=[
             Node(
@@ -317,7 +324,7 @@ def generate_launch_description():
                 output="screen",
                 arguments=[
                     "--controller-manager-timeout", "120",
-                    "joint_group_effort_controller",
+                    joint_controller_name,
                 ],
             )
         ]
@@ -385,7 +392,7 @@ def generate_launch_description():
             
             # Controller spawners that handle the complete lifecycle
             controller_spawner_js,
-            controller_spawner_effort,
+            controller_spawner_joints,
             controller_status_check,
             
             # Visualization (only if rviz flag is set)
