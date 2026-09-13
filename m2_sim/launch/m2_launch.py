@@ -12,7 +12,7 @@ from launch.actions import (
     IncludeLaunchDescription,
     TimerAction,
 )
-from launch.conditions import IfCondition, UnlessCondition
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration, PythonExpression
 
@@ -83,18 +83,6 @@ def generate_launch_description():
         "command_interface",
         default_value="position",
         description="ros2_control joint command interface: position or effort",
-    )
-    declare_disable_camera = DeclareLaunchArgument(
-        "disable_camera", default_value="true", description="Leave out the mono camera"
-    )
-    declare_disable_d455 = DeclareLaunchArgument(
-        "disable_d455", default_value="true", description="Leave out the RealSense D455"
-    )
-    declare_disable_lidar_l1 = DeclareLaunchArgument(
-        "disable_lidar_l1", default_value="true", description="Leave out the 4D Lidar L1"
-    )
-    declare_disable_velodyne_lidar = DeclareLaunchArgument(
-        "disable_velodyne_lidar", default_value="true", description="Leave out the Velodyne lidar"
     )
 
     joint_controller_name = PythonExpression([
@@ -257,48 +245,6 @@ def generate_launch_description():
         ],
     )
 
-    # Optional sensor bridges (disabled by default)
-    camera_bridge = Node(
-        package='ros_gz_bridge',
-        executable='parameter_bridge',
-        name='camera_bridge',
-        output='screen',
-        arguments=[ '/rgb_image@sensor_msgs/msg/Image@gz.msgs.Image', ],
-        condition=UnlessCondition(LaunchConfiguration('disable_camera')),
-    )
-
-    d455_bridge = Node(
-        package='ros_gz_bridge',
-        executable='parameter_bridge',
-        name='d455_bridge',
-        output='screen',
-        arguments=[
-            '/d455/image@sensor_msgs/msg/Image[gz.msgs.Image',
-            '/d455/depth_image@sensor_msgs/msg/Image[gz.msgs.Image',
-            '/d455/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked',
-            '/d455/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
-        ],
-        condition=UnlessCondition(LaunchConfiguration('disable_d455')),
-    )
-
-    lidar_l1_bridge = Node(
-        package='ros_gz_bridge',
-        executable='parameter_bridge',
-        name='lidar_l1_bridge',
-        output='screen',
-        arguments=[ '/lidar/points@sensor_msgs/msg/PointCloud2@gz.msgs.PointCloudPacked', ],
-        condition=UnlessCondition(LaunchConfiguration('disable_lidar_l1')),
-    )
-
-    velodyne_bridge = Node(
-        package='ros_gz_bridge',
-        executable='parameter_bridge',
-        name='velodyne_bridge',
-        output='screen',
-        arguments=[ '/velodyne_points/points@sensor_msgs/msg/PointCloud2@gz.msgs.PointCloudPacked', ],
-        condition=UnlessCondition(LaunchConfiguration('disable_velodyne_lidar')),
-    )
-
     # Controller spawners
     controller_spawner_js = TimerAction(
         period=10.0,
@@ -357,10 +303,6 @@ def generate_launch_description():
             declare_world_init_heading,
             declare_description_path, 
             declare_command_interface,
-            declare_disable_camera,
-            declare_disable_d455,
-            declare_disable_lidar_l1,
-            declare_disable_velodyne_lidar,
 
             # Environment variables
             set_gz_resource_path,
@@ -373,10 +315,6 @@ def generate_launch_description():
             robot_state_publisher_node,
             gazebo_spawn_robot,
             gazebo_bridge,
-            camera_bridge,
-            d455_bridge,
-            lidar_l1_bridge,
-            velodyne_bridge,
             
             # CHAMP controller nodes
             quadruped_controller_node,
