@@ -1,0 +1,85 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="mid360_lidar" params="parent:=Head_link">
+
+    <!-- Livox Mid-360 Mounting Joint and Link -->
+    <joint name="Lidar_1_joint" type="fixed">
+      <origin rpy="0 0 0" xyz="0.020784 0 0.074397"/>
+      <parent link="${parent}"/>
+      <child link="Lidar_1_link"/>
+    </joint>
+
+    <link name="Lidar_1_link">
+      <inertial>
+        <origin rpy="0 0 0" xyz="0.000213163047085158 -6.16932795034775e-06 -0.0172592260167642"/>
+        <mass value="0.265"/>
+        <inertia ixx="0.0001237" ixy="0" ixz="0"
+                 iyy="0.0001333" iyz="0" izz="0.0001323"/>
+      </inertial>
+      <visual>
+        <origin rpy="0 0 0" xyz="0 0 0"/>
+        <geometry>
+          <mesh filename="package://m2_description/meshes/Lidar_1_link.STL"/>
+        </geometry>
+        <material name="svan_dark_blue">
+          <color rgba="0.0 0.05 0.45 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin rpy="0 0 0" xyz="0 0 0"/>
+        <geometry>
+          <mesh filename="package://m2_description/meshes/Lidar_1_link.STL"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <!-- Mid-360 Optical / Ray Frame (at top optical dome of Mid-360) -->
+    <joint name="mid360_sensor_joint" type="fixed">
+      <origin rpy="0 0 0" xyz="0 0 0.025"/>
+      <parent link="Lidar_1_link"/>
+      <child link="mid360_link"/>
+    </joint>
+    <link name="mid360_link"/>
+
+    <!-- Gazebo Sim GPU LiDAR Plugin for Mid-360 -->
+    <gazebo reference="mid360_link">
+      <sensor name="mid360" type="gpu_lidar">
+        <topic>mid360</topic>
+        <update_rate>10</update_rate>
+        <gz_frame_id>mid360_link</gz_frame_id>
+        <lidar>
+          <scan>
+            <horizontal>
+              <samples>720</samples>
+              <resolution>1</resolution>
+              <min_angle>-3.14159265</min_angle>
+              <max_angle>3.14159265</max_angle>
+            </horizontal>
+            <vertical>
+              <!-- Downward-capable FOV for simulation (-25 deg to +35 deg, 48 rings) -->
+              <samples>48</samples>
+              <resolution>1</resolution>
+              <min_angle>-0.436332</min_angle>
+              <max_angle>0.610865</max_angle>
+            </vertical>
+          </scan>
+          <range>
+            <min>0.15</min>
+            <max>40.0</max>
+            <resolution>0.001</resolution>
+          </range>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.005</stddev>
+          </noise>
+        </lidar>
+        <visualize>true</visualize>
+        <always_on>1</always_on>
+      </sensor>
+    </gazebo>
+
+  </xacro:macro>
+
+</robot>
