@@ -3,6 +3,8 @@ import os
 import launch_ros
 from ament_index_python.packages import get_package_share_directory
 from launch_ros.actions import Node, SetParameter
+from launch_ros.descriptions import ParameterFile
+from launch_ros.substitutions import FindPackageShare
 
 from launch import LaunchDescription
 from launch.actions import (
@@ -14,7 +16,12 @@ from launch.actions import (
 )
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command, LaunchConfiguration, PythonExpression
+from launch.substitutions import (
+    Command,
+    LaunchConfiguration,
+    PathJoinSubstitution,
+    PythonExpression,
+)
 
 
 def generate_launch_description():
@@ -28,18 +35,14 @@ def generate_launch_description():
         value=pkg_m2_description_parent,
     )
 
-    m2_sim = launch_ros.substitutions.FindPackageShare(
-        package="m2_sim").find("m2_sim")
-    m2_description = launch_ros.substitutions.FindPackageShare(
-        package="m2_description").find("m2_description")
-    
+    m2_sim = FindPackageShare("m2_sim").find("m2_sim")
+    m2_description = FindPackageShare("m2_description").find("m2_description")
+
     joints_config = os.path.join(m2_sim, "config/joints/joints.yaml")
     ros_control_config = os.path.join(
         m2_sim, "config/ros_control/ros_control.yaml"
     )
-    gait_config = os.path.join(m2_sim, "config/gait/gait.yaml")
     links_config = os.path.join(m2_sim, "config/links/links.yaml")
-    default_model_path = os.path.join(m2_description, "urdf/m2_metal.urdf.xacro")
     default_world_path = os.path.join(m2_description, "worlds/default.sdf")
 
     declare_use_sim_time = DeclareLaunchArgument(
@@ -74,16 +77,55 @@ def generate_launch_description():
     declare_world_init_heading = DeclareLaunchArgument(
         "world_init_heading", default_value="0.0"
     )
+    declare_sensors = DeclareLaunchArgument(
+        "sensors",
+        default_value="true",
+        description="Enable perception sensors (Livox Mid-360 LiDAR and RealSense D455)",
+    )
+    declare_disable_mid360 = DeclareLaunchArgument(
+        "disable_mid360",
+        default_value="false",
+        description="Leave out the Livox Mid-360 LiDAR",
+    )
+    declare_disable_d455 = DeclareLaunchArgument(
+        "disable_d455",
+        default_value="false",
+        description="Leave out the RealSense D455",
+    )
+
+    # Dynamic model description path: selects dedicated sensors or bare xacro
+    description_file = PythonExpression([
+        "'m2_metal_sensors.urdf.xacro' if '",
+        LaunchConfiguration("sensors"),
+        "'.lower() == 'true' else 'm2_metal_bare.urdf.xacro'"
+    ])
+    default_model_path = PathJoinSubstitution([
+        FindPackageShare("m2_description"), "urdf", description_file
+    ])
+
     declare_description_path = DeclareLaunchArgument(
         "m2_description_path",
         default_value=default_model_path,
-        description="Path to the robot description file",
+        description="Path to the robot description file (m2_metal_sensors.urdf.xacro or m2_metal_bare.urdf.xacro)",
     )
     declare_command_interface = DeclareLaunchArgument(
         "command_interface",
         default_value="position",
         description="ros2_control joint command interface: position or effort",
     )
+
+    # Dynamic gait config path based on sensors flag
+    gait_config_path = PythonExpression([
+        "'", os.path.join(m2_sim, "config/gait/"), "' + ",
+        "('gait_sensors.yaml' if '", LaunchConfiguration('sensors'), "'.lower() == 'true' else 'gait_bare.yaml')"
+    ])
+    gait_config = ParameterFile(gait_config_path)
+
+    # Dynamic RViz config path based on sensors flag
+    rviz_config_path = PythonExpression([
+        "'", os.path.join(m2_sim, "rviz/"), "' + ",
+        "('m2_sensors.rviz' if '", LaunchConfiguration('sensors'), "'.lower() == 'true' else 'm2_bare.rviz')"
+    ])
 
     joint_controller_name = PythonExpression([
         "'joint_group_", LaunchConfiguration("command_interface"), "_controller'"
@@ -97,6 +139,8 @@ def generate_launch_description():
         "xacro ", LaunchConfiguration("m2_description_path"),
         " robot_controllers:=", LaunchConfiguration("ros_control_file"),
         " command_interface:=", LaunchConfiguration("command_interface"),
+        " disable_mid360:=", LaunchConfiguration("disable_mid360"),
+        " disable_d455:=", LaunchConfiguration("disable_d455"),
     ])
     robot_description = {"robot_description": description_command}
 
@@ -197,7 +241,7 @@ def generate_launch_description():
         package='rviz2',
         executable='rviz2',
         name='rviz2',
-        arguments=['-d', os.path.join(m2_sim, "rviz/rviz.rviz")],
+        arguments=['-d', rviz_config_path],
         condition=IfCondition(LaunchConfiguration("rviz")),
     )
     
@@ -208,7 +252,8 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(
             os.path.join(pkg_ros_gz_sim, 'launch', 'gz_sim.launch.py')),
         launch_arguments={
-            'gz_args': [LaunchConfiguration('world'), ' -r']  # Start unpaused
+            'gz_args': [LaunchConfiguration('world'), ' -r'],  # Start unpaused
+            'on_exit_shutdown': 'true',
         }.items(),
     )
     
@@ -227,7 +272,7 @@ def generate_launch_description():
         ],
     )
     
-    # Bridge ROS 2 and Gazebo Sim (core bridges only)
+    # Bridge ROS 2 and Gazebo Sim (core bridges)
     gazebo_bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
@@ -243,6 +288,42 @@ def generate_launch_description():
             '/lh_foot_contacts@ros_gz_interfaces/msg/Contacts[gz.msgs.Contacts',
             '/rh_foot_contacts@ros_gz_interfaces/msg/Contacts[gz.msgs.Contacts',
         ],
+    )
+
+    # Sensor bridges (Livox Mid-360 LiDAR and RealSense D455 Camera)
+    mid360_bridge = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        name='mid360_bridge',
+        output='screen',
+        arguments=[
+            '/mid360/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked',
+        ],
+        condition=IfCondition(
+            PythonExpression([
+                "'", LaunchConfiguration("sensors"), "'.lower() == 'true' and '",
+                LaunchConfiguration("disable_mid360"), "'.lower() != 'true'"
+            ])
+        ),
+    )
+
+    d455_bridge = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        name='d455_bridge',
+        output='screen',
+        arguments=[
+            '/d455/image@sensor_msgs/msg/Image[gz.msgs.Image',
+            '/d455/depth_image@sensor_msgs/msg/Image[gz.msgs.Image',
+            '/d455/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked',
+            '/d455/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
+        ],
+        condition=IfCondition(
+            PythonExpression([
+                "'", LaunchConfiguration("sensors"), "'.lower() == 'true' and '",
+                LaunchConfiguration("disable_d455"), "'.lower() != 'true'"
+            ])
+        ),
     )
 
     # Controller spawners
@@ -301,8 +382,11 @@ def generate_launch_description():
             declare_world_init_y,
             declare_world_init_z,
             declare_world_init_heading,
-            declare_description_path, 
+            declare_sensors,
+            declare_description_path,
             declare_command_interface,
+            declare_disable_mid360,
+            declare_disable_d455,
 
             # Environment variables
             set_gz_resource_path,
@@ -310,11 +394,13 @@ def generate_launch_description():
             # Parameters
             SetParameter(name="use_sim_time", value=use_sim_time),
 
-            # Gazebo and robot nodes first
+            # Gazebo and robot nodes
             gz_sim,
             robot_state_publisher_node,
             gazebo_spawn_robot,
             gazebo_bridge,
+            mid360_bridge,
+            d455_bridge,
             
             # CHAMP controller nodes
             quadruped_controller_node,
